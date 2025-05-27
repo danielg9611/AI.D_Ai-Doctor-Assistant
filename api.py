@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Body, Request
+from fastapi import FastAPI, Body, Request, HTTPException
 import psycopg2
 from psycopg2 import sql
 import os
@@ -173,5 +173,41 @@ async def create_ticket(request: Request):
         conn.close()
 
         return {"message": "Ticket creado"}
+    except Exception as e:
+        return {"error": str(e)}
+    
+
+
+@app.put('/api/tickets/{ticket_id}')
+async def update_ticket(ticket_id: int, request: Request):
+    try:
+        params = await request.json()
+        allowed_fields = ["paciente", "doctor", "sintomas", "padecimiento", "prescripcion", "especialidad", "estado", "urgencia"]
+        set_clauses = []
+        values = []
+        for field in allowed_fields:
+            if field in params:
+                set_clauses.append(f"{field} = %s")
+                values.append(params[field])
+        if not set_clauses:
+            raise HTTPException(status_code=400, detail="No fields to update.")
+        values.append(ticket_id)
+        set_clause = ", ".join(set_clauses)
+        query = f"UPDATE tickets SET {set_clause} WHERE id = %s"
+        conn = psycopg2.connect(
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            host=DB_HOST,
+            port=DB_PORT
+        )
+        cursor = conn.cursor()
+        cursor.execute(query, values)
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Ticket not found.")
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return {"message": "Ticket actualizado"}
     except Exception as e:
         return {"error": str(e)}
